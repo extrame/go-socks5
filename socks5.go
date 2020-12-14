@@ -145,8 +145,10 @@ func (s *Server) ServeConn(ctx context.Context, conn net.Conn) error {
 		return err
 	}
 
+	var src = conn.RemoteAddr()
+
 	// Authenticate the connection
-	authContext, err := s.authenticate(ctx, conn, bufConn)
+	authContext, err := s.authenticate(ctx, conn, bufConn, src)
 	if err != nil {
 		err = fmt.Errorf("Failed to authenticate: %v", err)
 		s.config.Logger.Printf("[ERR] socks: %v", err)

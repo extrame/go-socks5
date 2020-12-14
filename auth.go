@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 )
 
 const (
@@ -32,7 +33,7 @@ type AuthContext struct {
 }
 
 type Authenticator interface {
-	Authenticate(context.Context, io.Reader, io.Writer) (*AuthContext, error)
+	Authenticate(context.Context, io.Reader, io.Writer, net.Addr) (*AuthContext, error)
 	GetCode() uint8
 }
 
@@ -43,7 +44,7 @@ func (a NoAuthAuthenticator) GetCode() uint8 {
 	return NoAuth
 }
 
-func (a NoAuthAuthenticator) Authenticate(ctx context.Context, reader io.Reader, writer io.Writer) (*AuthContext, error) {
+func (a NoAuthAuthenticator) Authenticate(ctx context.Context, reader io.Reader, writer io.Writer, addr net.Addr) (*AuthContext, error) {
 	_, err := writer.Write([]byte{socks5Version, NoAuth})
 	return &AuthContext{NoAuth, nil}, err
 }
@@ -58,7 +59,7 @@ func (a UserPassAuthenticator) GetCode() uint8 {
 	return UserPassAuth
 }
 
-func (a UserPassAuthenticator) Authenticate(ctx context.Context, reader io.Reader, writer io.Writer) (*AuthContext, error) {
+func (a UserPassAuthenticator) Authenticate(ctx context.Context, reader io.Reader, writer io.Writer, addr net.Addr) (*AuthContext, error) {
 	// Tell the client to use user/pass auth
 	if _, err := writer.Write([]byte{socks5Version, UserPassAuth}); err != nil {
 		return nil, err
@@ -95,7 +96,7 @@ func (a UserPassAuthenticator) Authenticate(ctx context.Context, reader io.Reade
 	}
 
 	// Verify the password
-	if a.Credentials.Valid(ctx, string(user), string(pass)) {
+	if a.Credentials.Valid(ctx, string(user), string(pass), addr) {
 		if _, err := writer.Write([]byte{userAuthVersion, authSuccess}); err != nil {
 			return nil, err
 		}
@@ -111,7 +112,7 @@ func (a UserPassAuthenticator) Authenticate(ctx context.Context, reader io.Reade
 }
 
 // authenticate is used to handle connection authentication
-func (s *Server) authenticate(ctx context.Context, conn io.Writer, bufConn io.Reader) (*AuthContext, error) {
+func (s *Server) authenticate(ctx context.Context, conn io.Writer, bufConn io.Reader, addr net.Addr) (*AuthContext, error) {
 	// Get the methods
 	methods, err := readMethods(bufConn)
 	if err != nil {
@@ -122,7 +123,7 @@ func (s *Server) authenticate(ctx context.Context, conn io.Writer, bufConn io.Re
 	for _, method := range methods {
 		cator, found := s.authMethods[method]
 		if found {
-			return cator.Authenticate(ctx, bufConn, conn)
+			return cator.Authenticate(ctx, bufConn, conn, addr)
 		}
 	}
 
