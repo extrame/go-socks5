@@ -10,13 +10,13 @@ import (
 type AuthMethodCode uint8
 
 const (
-	NoAuth          AuthMethodCode = 0
-	userAuthVersion AuthMethodCode = 1
-	UserPassAuth    AuthMethodCode = 2
+	NoAuth       AuthMethodCode = 0
+	UserPassAuth AuthMethodCode = 2
 
-	noAcceptable uint8 = 255
-	authSuccess  uint8 = 0
-	authFailure  uint8 = 1
+	userAuthVersion uint8 = 1
+	noAcceptable    uint8 = 255
+	authSuccess     uint8 = 0
+	authFailure     uint8 = 1
 )
 
 func (a AuthMethodCode) String() string {
@@ -24,7 +24,7 @@ func (a AuthMethodCode) String() string {
 	case 0:
 		return "NoAuth"
 	case 1:
-		return "userAuthVersion"
+		return "GSSAPI"
 	case 2:
 		return "UserPassAuth"
 	default:
@@ -88,7 +88,7 @@ func (a UserPassAuthenticator) Authenticate(ctx context.Context, reader io.Reade
 	}
 
 	// Ensure we are compatible
-	if header[0] != byte(userAuthVersion) {
+	if header[0] != userAuthVersion {
 		return ctx, nil, fmt.Errorf("Unsupported auth version: %v", header[0])
 	}
 
@@ -114,11 +114,11 @@ func (a UserPassAuthenticator) Authenticate(ctx context.Context, reader io.Reade
 	// Verify the password
 	ctx_, ok := a.Credentials.Valid(ctx, string(user), string(pass), addr)
 	if ok {
-		if _, err := writer.Write([]byte{byte(userAuthVersion), authSuccess}); err != nil {
+		if _, err := writer.Write([]byte{userAuthVersion, authSuccess}); err != nil {
 			return ctx_, nil, err
 		}
 	} else {
-		if _, err := writer.Write([]byte{byte(userAuthVersion), authFailure}); err != nil {
+		if _, err := writer.Write([]byte{userAuthVersion, authFailure}); err != nil {
 			return ctx_, nil, err
 		}
 		return ctx_, nil, UserAuthFailed

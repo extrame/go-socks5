@@ -24,6 +24,7 @@ const (
 
 // Config is used to setup and configure a Server
 type Config struct {
+	OnNewSession func(ctx context.Context, addr net.Addr) context.Context
 	// AuthMethods can be provided to implement custom authentication
 	// By default, "auth-less" mode is enabled.
 	// For password-based auth use UserPassAuthenticator.
@@ -115,7 +116,6 @@ func (s *Server) ListenAndServe(network, addr string) error {
 
 // Serve is used to serve connections from a listener
 func (s *Server) Serve(l net.Listener) error {
-	var i = 0
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -123,7 +123,6 @@ func (s *Server) Serve(l net.Listener) error {
 		}
 		var now = time.Now()
 		ctx := context.WithValue(context.Background(), SessionID, fmt.Sprintf("%d%03d%03d", now.Unix(), now.Nanosecond()/int(time.Millisecond), rand.Intn(1000)))
-		i++
 		go s.ServeConn(ctx, conn)
 	}
 	return nil
@@ -150,8 +149,12 @@ func (s *Server) ServeConn(ctx context.Context, conn net.Conn) error {
 
 	var src = conn.RemoteAddr()
 
+	ctx_ := s.config.OnNewSession(ctx, src)
+
+	var authContext *AuthContext
+	var err error
 	// Authenticate the connection
-	ctx_, authContext, err := s.authenticate(ctx, conn, bufConn, src)
+	ctx_, authContext, err = s.authenticate(ctx_, conn, bufConn, src)
 	if err != nil {
 		err = fmt.Errorf("Failed to authenticate: %v", err)
 		s.config.Logger.Printf("[ERR] socks: %v", err)
