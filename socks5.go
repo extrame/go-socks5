@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"os"
+	"time"
 
 	"golang.org/x/net/context"
 )
@@ -60,7 +62,7 @@ type Config struct {
 // the details of the SOCKS5 protocol
 type Server struct {
 	config      *Config
-	authMethods map[uint8]Authenticator
+	authMethods map[AuthMethodCode]Authenticator
 }
 
 // New creates a new Server and potentially returns an error
@@ -93,7 +95,7 @@ func New(conf *Config) (*Server, error) {
 		config: conf,
 	}
 
-	server.authMethods = make(map[uint8]Authenticator)
+	server.authMethods = make(map[AuthMethodCode]Authenticator)
 
 	for _, a := range conf.AuthMethods {
 		server.authMethods[a.GetCode()] = a
@@ -119,7 +121,8 @@ func (s *Server) Serve(l net.Listener) error {
 		if err != nil {
 			return err
 		}
-		ctx := context.WithValue(context.Background(), SessionID, fmt.Sprintf("%d", i))
+		var now = time.Now()
+		ctx := context.WithValue(context.Background(), SessionID, fmt.Sprintf("%d%03d%03d", now.Unix(), now.Nanosecond()/int(time.Millisecond), rand.Intn(1000)))
 		i++
 		go s.ServeConn(ctx, conn)
 	}

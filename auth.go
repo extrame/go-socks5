@@ -7,25 +7,41 @@ import (
 	"net"
 )
 
+type AuthMethodCode uint8
+
 const (
-	NoAuth          = uint8(0)
-	noAcceptable    = uint8(255)
-	UserPassAuth    = uint8(2)
-	userAuthVersion = uint8(1)
-	authSuccess     = uint8(0)
-	authFailure     = uint8(1)
+	NoAuth          AuthMethodCode = 0
+	userAuthVersion AuthMethodCode = 1
+	UserPassAuth    AuthMethodCode = 2
+
+	noAcceptable uint8 = 255
+	authSuccess  uint8 = 0
+	authFailure  uint8 = 1
 )
+
+func (a AuthMethodCode) String() string {
+	switch uint8(a) {
+	case 0:
+		return "NoAuth"
+	case 1:
+		return "userAuthVersion"
+	case 2:
+		return "UserPassAuth"
+	default:
+		return "unknown"
+	}
+}
 
 var (
 	UserAuthFailed  = fmt.Errorf("User authentication failed")
-	NoSupportedAuth = fmt.Errorf("No supported authentication mechanism")
+	NoSupportedAuth = "No supported authentication mechanism in %v"
 )
 
 // A Request encapsulates authentication state provided
 // during negotiation
 type AuthContext struct {
 	// Provided auth method
-	Method uint8
+	Method AuthMethodCode
 	// Payload provided during negotiation.
 	// Keys depend on the used auth method.
 	// For UserPassauth contains Username
@@ -34,18 +50,18 @@ type AuthContext struct {
 
 type Authenticator interface {
 	Authenticate(context.Context, io.Reader, io.Writer, net.Addr) (context.Context, *AuthContext, error)
-	GetCode() uint8
+	GetCode() AuthMethodCode
 }
 
 // NoAuthAuthenticator is used to handle the "No Authentication" mode
 type NoAuthAuthenticator struct{}
 
-func (a NoAuthAuthenticator) GetCode() uint8 {
+func (a NoAuthAuthenticator) GetCode() AuthMethodCode {
 	return NoAuth
 }
 
 func (a NoAuthAuthenticator) Authenticate(ctx context.Context, reader io.Reader, writer io.Writer, addr net.Addr) (context.Context, *AuthContext, error) {
-	_, err := writer.Write([]byte{socks5Version, NoAuth})
+	_, err := writer.Write([]byte{socks5Version, byte(NoAuth)})
 	return ctx, &AuthContext{NoAuth, nil}, err
 }
 
@@ -55,13 +71,13 @@ type UserPassAuthenticator struct {
 	Credentials CredentialStore
 }
 
-func (a UserPassAuthenticator) GetCode() uint8 {
+func (a UserPassAuthenticator) GetCode() AuthMethodCode {
 	return UserPassAuth
 }
 
 func (a UserPassAuthenticator) Authenticate(ctx context.Context, reader io.Reader, writer io.Writer, addr net.Addr) (context.Context, *AuthContext, error) {
 	// Tell the client to use user/pass auth
-	if _, err := writer.Write([]byte{socks5Version, UserPassAuth}); err != nil {
+	if _, err := writer.Write([]byte{socks5Version, byte(UserPassAuth)}); err != nil {
 		return ctx, nil, err
 	}
 
@@ -72,7 +88,7 @@ func (a UserPassAuthenticator) Authenticate(ctx context.Context, reader io.Reade
 	}
 
 	// Ensure we are compatible
-	if header[0] != userAuthVersion {
+	if header[0] != byte(userAuthVersion) {
 		return ctx, nil, fmt.Errorf("Unsupported auth version: %v", header[0])
 	}
 
@@ -98,11 +114,11 @@ func (a UserPassAuthenticator) Authenticate(ctx context.Context, reader io.Reade
 	// Verify the password
 	ctx_, ok := a.Credentials.Valid(ctx, string(user), string(pass), addr)
 	if ok {
-		if _, err := writer.Write([]byte{userAuthVersion, authSuccess}); err != nil {
+		if _, err := writer.Write([]byte{byte(userAuthVersion), authSuccess}); err != nil {
 			return ctx_, nil, err
 		}
 	} else {
-		if _, err := writer.Write([]byte{userAuthVersion, authFailure}); err != nil {
+		if _, err := writer.Write([]byte{byte(userAuthVersion), authFailure}); err != nil {
 			return ctx_, nil, err
 		}
 		return ctx_, nil, UserAuthFailed
@@ -129,26 +145,30 @@ func (s *Server) authenticate(ctx context.Context, conn io.Writer, bufConn io.Re
 	}
 
 	// No usable method found
-	return ctx, nil, noAcceptableAuth(conn)
+	return ctx, nil, noAcceptableAuth(conn, methods)
 }
 
 // noAcceptableAuth is used to handle when we have no eligible
 // authentication mechanism
-func noAcceptableAuth(conn io.Writer) error {
+func noAcceptableAuth(conn io.Writer, methods []AuthMethodCode) error {
 	conn.Write([]byte{socks5Version, noAcceptable})
-	return NoSupportedAuth
+	return fmt.Errorf(NoSupportedAuth, methods)
 }
 
 // readMethods is used to read the number of methods
 // and proceeding auth methods
-func readMethods(r io.Reader) ([]byte, error) {
+func readMethods(r io.Reader) ([]AuthMethodCode, error) {
 	header := []byte{0}
 	if _, err := r.Read(header); err != nil {
 		return nil, err
 	}
 
 	numMethods := int(header[0])
-	methods := make([]byte, numMethods)
+	methods := make([]uint8, numMethods)
 	_, err := io.ReadAtLeast(r, methods, numMethods)
-	return methods, err
+	alisedMethods := make([]AuthMethodCode, len(methods))
+	for k, v := range methods {
+		alisedMethods[k] = AuthMethodCode(v)
+	}
+	return alisedMethods, err
 }
