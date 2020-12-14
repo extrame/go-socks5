@@ -112,13 +112,14 @@ func (s *Server) Serve(l net.Listener) error {
 		if err != nil {
 			return err
 		}
-		go s.ServeConn(conn)
+		ctx := context.Background()
+		go s.ServeConn(ctx, conn)
 	}
 	return nil
 }
 
 // ServeConn is used to serve a single connection.
-func (s *Server) ServeConn(conn net.Conn) error {
+func (s *Server) ServeConn(ctx context.Context, conn net.Conn) error {
 	defer conn.Close()
 	bufConn := bufio.NewReader(conn)
 
@@ -137,7 +138,7 @@ func (s *Server) ServeConn(conn net.Conn) error {
 	}
 
 	// Authenticate the connection
-	authContext, err := s.authenticate(conn, bufConn)
+	authContext, err := s.authenticate(ctx, conn, bufConn)
 	if err != nil {
 		err = fmt.Errorf("Failed to authenticate: %v", err)
 		s.config.Logger.Printf("[ERR] socks: %v", err)
