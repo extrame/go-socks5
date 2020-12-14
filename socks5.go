@@ -10,8 +10,14 @@ import (
 	"golang.org/x/net/context"
 )
 
+type IDKey int
+
 const (
 	socks5Version = uint8(5)
+
+	ClientID      IDKey = iota
+	SessionID     IDKey = iota
+	TransactionID IDKey = iota
 )
 
 // Config is used to setup and configure a Server
@@ -107,12 +113,14 @@ func (s *Server) ListenAndServe(network, addr string) error {
 
 // Serve is used to serve connections from a listener
 func (s *Server) Serve(l net.Listener) error {
+	var i = 0
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			return err
 		}
-		ctx := context.Background()
+		ctx := context.WithValue(context.Background(), SessionID, fmt.Sprintf("%d", i))
+		i++
 		go s.ServeConn(ctx, conn)
 	}
 	return nil
@@ -160,7 +168,7 @@ func (s *Server) ServeConn(ctx context.Context, conn net.Conn) error {
 	}
 
 	// Process the client request
-	if err := s.handleRequest(request, conn); err != nil {
+	if err := s.handleRequest(ctx, request, conn); err != nil {
 		err = fmt.Errorf("Failed to handle request: %v", err)
 		s.config.Logger.Printf("[ERR] socks: %v", err)
 		return err
