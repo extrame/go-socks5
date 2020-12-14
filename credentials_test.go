@@ -13,15 +13,15 @@ func TestStaticCredentials(t *testing.T) {
 		"baz": "",
 	}
 
-	if !creds.Valid(ctx, "foo", "bar", nil) {
+	if _, ok := creds.Valid(ctx, "foo", "bar", nil); !ok {
 		t.Fatalf("expect valid")
 	}
 
-	if !creds.Valid(ctx, "baz", "", nil) {
+	if _, ok := creds.Valid(ctx, "baz", "", nil); !ok {
 		t.Fatalf("expect valid")
 	}
 
-	if creds.Valid(ctx, "foo", "", nil) {
+	if _, ok := creds.Valid(ctx, "foo", "", nil); ok {
 		t.Fatalf("expect invalid")
 	}
 }
