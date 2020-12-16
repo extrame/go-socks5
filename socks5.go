@@ -148,8 +148,13 @@ func (s *Server) ServeConn(ctx context.Context, conn net.Conn) error {
 	}
 
 	var src = conn.RemoteAddr()
+	var ctx_ context.Context
 
-	ctx_ := s.config.OnNewSession(ctx, src)
+	if s.config.OnNewSession != nil {
+		ctx_ = s.config.OnNewSession(ctx, src)
+	} else {
+		ctx_ = ctx
+	}
 
 	var authContext *AuthContext
 	var err error
