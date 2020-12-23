@@ -24,7 +24,8 @@ const (
 
 // Config is used to setup and configure a Server
 type Config struct {
-	OnNewSession func(ctx context.Context, addr net.Addr) context.Context
+	OnHandleError func(ctx context.Context, err error)
+	OnNewSession  func(ctx context.Context, addr net.Addr) context.Context
 	// AuthMethods can be provided to implement custom authentication
 	// By default, "auth-less" mode is enabled.
 	// For password-based auth use UserPassAuthenticator.
@@ -183,7 +184,11 @@ func (s *Server) ServeConn(ctx context.Context, conn net.Conn) error {
 	// Process the client request
 	if err := s.handleRequest(ctx_, request, conn); err != nil {
 		err = fmt.Errorf("Failed to handle request: %v", err)
-		s.config.Logger.Printf("[ERR] socks: %v", err)
+		if s.config.OnHandleError != nil {
+			s.config.OnHandleError(ctx_, err)
+		} else {
+			s.config.Logger.Printf("[ERR] socks: %v", err)
+		}
 		return err
 	}
 
